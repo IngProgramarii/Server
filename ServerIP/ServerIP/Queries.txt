@@ -1,0 +1,13 @@
+<query>
+	<name>
+		getUser
+	</name>
+	<text>
+		select * from user where user_id = %id%
+	</text>
+	<parameters>
+		<parameter>
+			%id%
+		</parameter>
+	</parameters>
+</query>
