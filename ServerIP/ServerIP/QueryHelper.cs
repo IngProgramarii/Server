@@ -9,18 +9,21 @@ namespace ServerIP
     public class QueryHelper
     { 
         private static Dictionary<string,Pair<string,List<string>>> queries { get; set; }
+        private static string currentQuery { get; set; }
 
         private static void SetParameters(string name, Dictionary<string, string> parameters)
         {
+            currentQuery = queries[name].Item1;
+
             foreach (var key in parameters.Keys)
             {
-                queries[name].Item1 = queries[name].Item1.Replace(queries[name].Item2.Find(x => x.Contains(key)), parameters[key]);
+                currentQuery = currentQuery.Replace(queries[name].Item2.Find(x => x.Contains(key)), "\"" + parameters[key] + "\"");
             }
         }
         public static string getQuery(string name, Dictionary<string,string> parameters)
         {
             SetParameters(name, parameters);
-            return queries[name].Item1;
+            return currentQuery;
         }
 
         public static void ImportQueries()
@@ -48,6 +51,7 @@ namespace ServerIP
                 }
                 if (line.Trim() == "<parameters>")
                 {
+                    parameters = new List<string>();
                     while (line.Trim() != "</parameters>")
                     {
                         line = file.ReadLine();

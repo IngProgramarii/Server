@@ -2,6 +2,10 @@
 using System.Net;
 using System.Text;
 using System.Threading;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Converters;
+using MySql.Data.MySqlClient;
 
 namespace ServerIP
 {
@@ -9,59 +13,10 @@ namespace ServerIP
     {
         static void Main(string[] args)
         {
-           
-                Console.WriteLine("Running async server.");
-                new AsyncServer();
-            
-        }
-    }
+            QueryHelper.ImportQueries();//Important thing must be first;
+            Console.WriteLine("Running async server.");
+            new AsyncServer();
 
-    public class SyncServer
-    {
-        public SyncServer()
-        {
-            var listener = new HttpListener();
-
-            listener.Prefixes.Add("http://localhost:8081/");
-            listener.Prefixes.Add("http://127.0.0.1:8081/");
-            listener.Prefixes.Add("http://192.168.1.119:8888/");
-
-            listener.Start();
-
-            while (true)
-            {
-                try
-                {
-                    var context = listener.GetContext(); //Block until a connection comes in
-                    context.Response.StatusCode = 200;
-                    context.Response.SendChunked = true;
-
-                    int totalTime = 0;
-
-                    while (true)
-                    {
-                        if (totalTime % 3000 == 0)
-                        {
-                            var bytes = Encoding.UTF8.GetBytes(new string('3', 1000) + "\n");
-                            context.Response.OutputStream.Write(bytes, 0, bytes.Length);
-                        }
-
-                        if (totalTime % 5000 == 0)
-                        {
-                            var bytes = Encoding.UTF8.GetBytes(new string('5', 1000) + "\n");
-                            context.Response.OutputStream.Write(bytes, 0, bytes.Length);
-                        }
-
-                        Thread.Sleep(1000);
-                        totalTime += 1000;
-                    }
-
-                }
-                catch (Exception)
-                {
-                    // Client disconnected or some other error - ignored for this example
-                }
-            }
         }
     }
 
@@ -71,9 +26,9 @@ namespace ServerIP
         {
             var listener = new HttpListener();
 
-           // listener.Prefixes.Add("http://localhost:8081/");
-           // listener.Prefixes.Add("http://127.0.0.1:8081/");
-            listener.Prefixes.Add("http://192.168.1.119:80/");
+            // listener.Prefixes.Add("http://localhost:8081/");
+            // listener.Prefixes.Add("http://127.0.0.1:8081/");
+            listener.Prefixes.Add("http://192.168.1.30:11000/");
 
             listener.Start();
 
@@ -82,14 +37,13 @@ namespace ServerIP
                 try
                 {
                     var context = listener.GetContext();
-                    //if(context.Request)
                     byte[] bytes = new byte[1024];
                     context.Request.InputStream.Read(bytes, 0, bytes.Length);
-                    string t = Encoding.UTF8.GetString(bytes).Trim();
-                    Console.WriteLine("client message:" + t);
-                    bytes = Encoding.UTF8.GetBytes(t.Length.ToString());
-                    context.Response.OutputStream.Write(bytes, 0, bytes.Length);
-                  //  ThreadPool.QueueUserWorkItem(o => HandleRequest(context));
+                    Console.WriteLine("client message:");
+                    JObject jo = JObject.Parse(Encoding.UTF8.GetString(bytes).Trim());
+                    //jo.GetValue("email"); password, action< login register>
+                    Console.WriteLine(jo);
+                    ThreadPool.QueueUserWorkItem(o => HandleRequest(context, jo));
                 }
                 catch (Exception)
                 {
@@ -98,34 +52,19 @@ namespace ServerIP
             }
         }
 
-        private void HandleRequest(object state)
+        private void HandleRequest(object state, JObject jo)
         {
             try
             {
                 var context = (HttpListenerContext)state;
-
                 context.Response.StatusCode = 200;
                 context.Response.SendChunked = true;
 
-                int totalTime = 0;
-
-                while (true)
-                {
-                    if (totalTime % 3000 == 0)
-                    {
-                        var bytes = Encoding.UTF8.GetBytes(new string('3', 1000) + "\n");
-                        context.Response.OutputStream.Write(bytes, 0, bytes.Length);
-                    }
-
-                    if (totalTime % 5000 == 0)
-                    {
-                        var bytes = Encoding.UTF8.GetBytes(new string('5', 1000) + "\n");
-                        context.Response.OutputStream.Write(bytes, 0, bytes.Length);
-                    }
-
-                    Thread.Sleep(1000);
-                    totalTime += 1000;
-                }
+                string response = SearchForUser(jo).ToString();
+                Console.WriteLine(response);
+                var bytes = Encoding.UTF8.GetBytes(response);
+                context.Response.OutputStream.Write(bytes, 0, bytes.Length);
+                context.Response.OutputStream.Close();
             }
             catch (Exception)
             {
@@ -133,13 +72,73 @@ namespace ServerIP
                 // Client disconnected or some other error - ignored for this example
             }
         }
+        private JObject SearchForUser(JObject jo)
+        {
+            //TODO add constants
+            if (jo.GetValue("action").ToString() == "login")
+            {
+                return Login(jo);
+            }
+            return Register(jo);
+        }
+
+        private JObject Login(JObject jo)
+        {
+            string t;
+            JObject j = new JObject();
+            if (!FindUserName(jo.GetValue("email").ToString()))
+            {
+                t = "fail_email";
+                j.Add("result", t);
+                return j;
+            }
+            Query query = new Query();
+            //TODO rename functions;
+            query.setParameter("userName", jo.GetValue("email").ToString());
+            query.setParameter("password", jo.GetValue("password").ToString());
+            query.name = "getUser";
+            MySqlDataReader user = query.ExecuteSelect();
+            user.Read();
+
+            if (user.HasRows)
+            {
+                //TODO something
+                t = "success";
+            }
+            else t = "fail_password";
+            j.Add("result", t);
+            return j;
+        }
+
+        private JObject Register(JObject jo)
+        {
+            string t = "success";
+            JObject j = new JObject();
+
+            Query query = new Query();
+            query.setParameter("userName", jo.GetValue("email").ToString());
+            query.setParameter("password", jo.GetValue("password").ToString());
+            query.name = "insertUser";
+            query.ExecuteNonSelect();
+
+            j.Add("result", t);
+            return j;
+        }
+
+        private bool FindUserName(string userName)
+        {
+            Query query = new Query();
+            //TODO rename functions;
+            query.setParameter("userName", userName);
+            query.name = "findUser";
+            MySqlDataReader user = query.ExecuteSelect();
+            user.Read();
+            if (user.HasRows)
+                return true;
+            return false;
+        }
     }
 }
-/* QueryHelper.ImportQueries();
-Query query = new Query();
-query.setParameter("id", "69");
-query.name = "getUser";
-MySqlDataReader user = query.ExecuteSelect();
-user.Read();
+/* 
 Console.WriteLine(user["user_name"]);
 Console.ReadKey();*/
