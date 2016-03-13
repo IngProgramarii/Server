@@ -1,0 +1,45 @@
+<query>
+	<name>
+		getUser
+	</name>
+	<text>
+		select * from user where user_name = %userName% and password = %password%
+	</text>
+	<parameters>
+		<parameter>
+			%userName%
+		</parameter>
+		<parameter>
+			%password%
+		</parameter>
+	</parameters>
+</query>
+<query>
+	<name>
+		insertUser
+	</name>
+	<text>
+		insert into user (user_name, password) values (%userName%, %password%)
+	</text>
+	<parameters>
+		<parameter>
+			%userName%
+		</parameter>
+		<parameter>
+			%password%
+		</parameter>
+	</parameters>
+</query>
+<query>
+	<name>
+		findUser
+	</name>
+	<text>
+		select * from user where user_name = %userName%
+	</text>
+	<parameters>
+		<parameter>
+			%userName%
+		</parameter>
+	</parameters>
+</query>
